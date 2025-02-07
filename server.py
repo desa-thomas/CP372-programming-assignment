@@ -7,9 +7,11 @@ class server:
     Server class
     
     attributes:
-        self.count : (int) number of clients that have connected (since server start)
-        self.client_name_dict : (dict) dictionary containing information about connected clients
-        self.server_socket : (socket) server socket
+        self.count            : (int)    number of clients that have connected (since server start)
+        self.client_name_dict : (dict)   dictionary containing information about connected clients
+        self.server_socket    : (socket) server socket
+        self.active_clients   : (int)    Number of currently active clients on server
+        self.lock             : (Lock)   Thread lock for threads 
     """
     MAX_CLIENTS = 3
     
@@ -23,12 +25,13 @@ class server:
         self.client_name_dict = {}
         self.count = 1
         
+        #Thread lock for changing active clients on each thread
         self.active_clients = 0
         self.lock = threading.Lock()
     
     def handle_client(self, client_socket: socket.socket, address, i):
         """
-        Function to handle client i
+        Function to handle client i's session. Called by thread i
         """
         
         with self.lock:
@@ -46,10 +49,10 @@ class server:
             self.client_name_dict[f"Client{i}"] = []
             self.client_name_dict[f"Client{i}"].append(name)
             self.client_name_dict[f"Client{i}"].append(datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
-            self.client_name_dict[f"Client{i}"].append("Active")
+            self.client_name_dict[f"Client{i}"].append("Active") #update this once Client socket is closed
 
         
-        #Maintain connection and echo {data} ACK while they are connected
+        #Maintain connection and echo {data} ACK while they are connected (or status)
         while True:
             
             data = client_socket.recv(1024).decode()
@@ -64,10 +67,11 @@ class server:
                 status += f"{"Client id":<12}{"Name":<15}{"Start time":<24}{"End time":<24}"
                 status += "\n\n"
                 
-                #iterate ovfer dict
+                #iterate over client_name_dict
                 for client in self.client_name_dict.items():
                     status += f"{client[0]:<12}"
-                    #iterate over info array
+                    
+                    #iterate over info array => [name, start, end]
                     for x in range(len(client[1])):
                         if x == 0:
                              status += f"{client[1][x]:<15}"
@@ -75,7 +79,6 @@ class server:
                             status += f"{client[1][x]:<24}"
                     
                     status += "\n"
-                    
                 status += "-"*75 + "\n"
                 
                 client_socket.send(bytes(status, "utf-8"))
@@ -83,11 +86,12 @@ class server:
                 #Echo message back with ACK
                 client_socket.send(bytes(f"{data} ACK", "utf-8"))
                 
-        #store end time
+        #Connection is closed -> store end time
         self.client_name_dict[f"Client{i}"][2]= (datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
         print(f"{name} quit: {address}")
         client_socket.close()
         
+        #Decrement active clients
         with self.lock:
             self.active_clients -= 1
 
@@ -99,18 +103,17 @@ class server:
         self.server_socket.listen(server.MAX_CLIENTS)
         print("Server is listening...")
         
-        while True:
-            #Reject connections when there are move than MAX_CLIENTS active clients
-                
+        while True:                
             client_socket, addr = self.server_socket.accept()
             full = False
             
+            #Check active connections
+            #if > max_clients, send message that server is full and close socket
             with self.lock:
-                #If server full, reject connection
                 if self.active_clients == server.MAX_CLIENTS:
-                    print("server full")
                     full = True
-                    client_socket.send(bytes("Server is full. Try again later.", "utf-8"))
+                    print(f"server full - {addr} rejected")
+                    client_socket.send(bytes("Server is full", "utf-8"))
                     client_socket.close()
                     pass
                 else: 
