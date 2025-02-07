@@ -3,14 +3,27 @@ import os
 
 def start_client():
     #clear CLI screen
+    size = os.get_terminal_size().columns
     os.system('cls' if os.name == 'nt' else 'clear')
-    print(f"{"CP372 Programming Assignment Client Interface":-^100}")
+    print(f"{"CP372 Programming Assignment Client Interface":-^{size}}")
     
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect(('localhost', 1738))  # Connect to the server
+    
+    # Check if the server rejected the connection
+    init_message = client_socket.recv(1024).decode()
+    if init_message != "OK":
+        print(f"\n{"Server full ... Connection rejected"}\n")
+        client_socket.close()
+        return  
 
     #First message cilent sends name
-    message = input("\n(Enter name)--> ")
+    print("(quit/q to exit)")
+    message = input("\nEnter name\n\n--> ")
+    print()
+    if message.lower() == "quit" or message.lower() == "q":
+        client_socket.close()
+        return
     client_socket.send(message.encode())
     data = client_socket.recv(1024).decode()
     print(f"{data}\n")
