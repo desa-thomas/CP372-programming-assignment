@@ -32,7 +32,7 @@ class server:
     
     def handle_client(self, client_socket: socket.socket, address, i):
         """
-        Function to handle client i's session. Called by thread i
+        Function to handle client i's session, called in a separate thread for each.
         """
         
         with self.lock:
