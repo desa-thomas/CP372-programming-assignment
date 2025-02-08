@@ -19,26 +19,33 @@ def start_client():
 
     #First message cilent sends name
     print("(quit/q to exit)")
-    message = input("\nEnter name\n\n--> ")
-    print()
-    if message.lower() == "quit" or message.lower() == "q":
-        client_socket.close()
-        return
-    client_socket.send(message.encode())
-    data = client_socket.recv(1024).decode()
-    print(f"{data}\n")
+    print("\nEnter name:\n|", end="")
+
+
+    # if message.lower() == "quit" or message.lower() == "q":
+    #     client_socket.close()
+    #     return
+    # client_socket.send(message.encode())
+    # data = client_socket.recv(1024).decode()
+    # print(f"{data}\n")
 
     
     #Main loop, clien can send any string
     while True:
-        message = input("--> ")
+        message = input("\n|--> ")
         if message.lower() == "quit" or message.lower() == "q":
             break
+        
+        #don't allow empty strings
+        elif message == "":
+            continue
         
         client_socket.send(message.encode())
 
         data = client_socket.recv(1024).decode()
-        print(f"{data}\n")
+        
+        if(data != "pass"): 
+            print(f"{data}")    
 
     client_socket.close()
 

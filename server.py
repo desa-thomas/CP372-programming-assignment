@@ -1,6 +1,7 @@
 import threading
 import socket
 from datetime import datetime
+import os 
 
 class server:
     """
@@ -41,9 +42,10 @@ class server:
         name = client_socket.recv(1024).decode()
         if name:
             print(f"Client{i}: {name} connected")
-            print(f"{self.active_clients} active clients")
-
-            client_socket.send(bytes(f"Welcome {name}: Enter any string, or 'status' to see client information", 'utf-8'))
+            
+            s = f"Welcome {name}. Enter any string, or 'status' to see server cache"
+            welcome_msg = f"{"*"*5}  {s}  {"*"*5}" 
+            client_socket.send(bytes(f"\n{welcome_msg:>100}", 'utf-8'))
             
             #Store client info
             self.client_name_dict[f"Client{i}"] = []
@@ -51,7 +53,11 @@ class server:
             self.client_name_dict[f"Client{i}"].append(datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
             self.client_name_dict[f"Client{i}"].append("Active") #update this once Client socket is closed
 
-        
+        #If user closes connection before providing name
+        else:
+            with self.lock: 
+                self.active_clients -= 1  
+            return
         #Maintain connection and echo {data} ACK while they are connected (or status)
         while True:
             
@@ -63,13 +69,13 @@ class server:
             
             #Send status if requested
             if(data.lower() == "status" ):
-                status = "\n" + "-"*75 + "\n"
-                status += f"{"Client id":<12}{"Name":<15}{"Start time":<24}{"End time":<24}"
-                status += "\n\n"
+                status = "|\n|" + "-"*75 + "\n"
+                status += f"| {"Client id":<12}{"Name":<15}{"Start time":<24}{"End time":<24}"
+                status += "\n|\n"
                 
                 #iterate over client_name_dict
                 for client in self.client_name_dict.items():
-                    status += f"{client[0]:<12}"
+                    status += f"| {client[0]:<12}"
                     
                     #iterate over info array => [name, start, end]
                     for x in range(len(client[1])):
@@ -79,12 +85,47 @@ class server:
                             status += f"{client[1][x]:<24}"
                     
                     status += "\n"
-                status += "-"*75 + "\n"
+                status += "|" + "-"*75
                 
                 client_socket.send(bytes(status, "utf-8"))
+            
+            #If client requests server file list
+            elif(data.lower() == "list"): 
+                list_str = "|"
+                for file in os.listdir("server-files"):
+                    list_str += f"\n| {file}"
+                
+                client_socket.send(bytes(list_str, "utf-8"))
+                #receive clients requested file
+                requested_file = client_socket.recv(1024).decode()
+                
+                if requested_file:
+                    
+                    while requested_file not in os.listdir("server-files"):
+                        #Stop searching for file
+                        if requested_file == "<":
+                            break
+                        client_socket.send(bytes(f"|\n| ERROR: file not found, try again (< to stop selecting file)\n{list_str}", "utf-8"))
+                        requested_file = client_socket.recv(1024).decode()
+                    
+                    #If file exists send it to client
+                    if requested_file != "<":
+                        with open(f"server-files/{requested_file}", "rb") as file:
+                            client_socket.sendfile(file)
+                    else:
+                        print(" here ")
+                        #if client hit "<" send '\n' so both client and server aren't stuck listening
+                        client_socket.send(bytes("pass", "utf-8"))
+                        
+                #if nothing is recieved client disconnected
+                else:
+                    with self.lock:
+                        self.active_clients -=1
+                    break
+                    
             else: 
                 #Echo message back with ACK
-                client_socket.send(bytes(f"{data} ACK", "utf-8"))
+                client_socket.send(bytes(f"|\n| {data} ACK", "utf-8"))
                 
         #Connection is closed -> store end time
         self.client_name_dict[f"Client{i}"][2]= (datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
